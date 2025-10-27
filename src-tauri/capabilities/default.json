@@ -2,10 +2,53 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
+  "allowlist": {
+    "fs": {
+      "writeFile": true,
+      "allow": [
+        {
+          "path": "$APPDATA/*"
+        }
+      ]
+    },
+    "dialog": {
+      "save": true
+    }
+  },
   "permissions": [
     "core:default",
     "opener:default",
-    "udp:default"
+    "udp:default",
+    "store:default",
+    "core:app:allow-set-app-theme",
+    "core:app:allow-default-window-icon",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-destroy",
+    "core:window:allow-minimize",
+    "core:app:allow-app-hide",
+    "core:app:allow-app-show",
+    "core:window:allow-set-focus",
+    "sql:default",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "core:webview:allow-create-webview-window",
+    "core:webview:allow-create-webview",
+    "fs:default",
+    "fs:read-all",
+    "fs:write-all",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        {
+          "path": "$APPLOCALDATA/*"
+        }
+      ]
+    },
+    "dialog:default",
+    "os:default"
   ]
 }
