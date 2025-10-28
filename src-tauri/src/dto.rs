@@ -1,6 +1,5 @@
 use crate::protocol::{AoaGateway, AoaTag};
 use crate::udp::Payload;
-use crate::{GATEWAY_LIST, GATEWAY_MAP};
 use bytebuffer::ByteBuffer;
 use rust_decimal::prelude::*;
 use rust_decimal::Decimal;
@@ -35,7 +34,7 @@ pub struct TagDto {
 }
 
 impl TagDto {
-    fn merge(&mut self, other: &TagDto) {
+    pub(crate) fn merge(&mut self, other: &TagDto) {
         if let Some(voltage) = other.voltage {
             self.voltage = Some(voltage);
         }
@@ -110,7 +109,7 @@ impl Serialize for Gateway {
         .serialize(serializer)
     }
 }
-fn transform(aoa_tag: AoaTag) -> TagDto {
+pub(crate) fn transform(aoa_tag: AoaTag) -> TagDto {
     let mut tag_dto = TagDto {
         mac: format_mac(aoa_tag.mac),
         voltage: None,
@@ -171,72 +170,6 @@ fn transform(aoa_tag: AoaTag) -> TagDto {
     }
     tag_dto
 }
-pub async fn process<R: Runtime>(window: tauri::Window<R>, data: Vec<u8>) {
-    if let Some(aoa_gateway) = AoaGateway::get_instance(data) {
-        let mac = format_mac(aoa_gateway.dev_id);
-        let _ =
-            window
-                .app_handle()
-                .emit_to(window.label(), "plugin://aoa_tag", aoa_gateway.clone());
-        let mut byte_buffer = ByteBuffer::from_vec(aoa_gateway.data.clone());
-        let count = byte_buffer.read_u8().unwrap() as usize;
-        let tag_list = Mutex::new(vec![]);
-        let tag_map = Mutex::new(HashMap::new());
-        if aoa_gateway.data.len() == count * 38 + 1 {
-            for _i in 0..count {
-                let aoa_tag = AoaTag::get_instance(
-                    byte_buffer
-                        .read_bytes(38)
-                        .unwrap()
-                        .as_slice()
-                        .try_into()
-                        .unwrap(),
-                );
-                let tag = Arc::new(Mutex::new(transform(aoa_tag)));
-                tag_list.lock().unwrap().push(tag.clone());
-                tag_map
-                    .lock()
-                    .unwrap()
-                    .insert(tag.lock().unwrap().mac.clone(), tag.clone());
-            }
-        }
-        let mut gateway_list = GATEWAY_LIST.write().unwrap();
-        let mut gateway_map = GATEWAY_MAP.write().unwrap();
-        if gateway_map.contains_key(&mac) {
-            let mut gateway = gateway_map.get(&mac).unwrap().lock().unwrap();
-            gateway.packet_receive_rate = tag_list.lock().unwrap().len().to_u32().unwrap();
-            gateway.total += gateway.packet_receive_rate;
-            for tag in tag_list.lock().unwrap().iter() {
-                let tag_guard = tag.clone();
-                gateway.tag_packets.push(tag.clone());
-                let mut tag_map = gateway.tag_map.lock().unwrap();
-                if tag_map.contains_key(&tag_guard.lock().unwrap().mac) {
-                    // map.get(&tag_guard.mac).unwrap().lock().unwrap().clone().merge(&tag_guard);
-                    let item = tag_map.get_mut(&tag_guard.lock().unwrap().mac).unwrap();
-                    item.lock().unwrap().merge(&tag_guard.lock().unwrap());
-                    item.lock().unwrap().packet_count += 1;
-                    // map.get(&tag_guard.lock().unwrap().mac).unwrap().clone().lock().unwrap().merge(&tag_guard.lock().unwrap());
-                    //合并
-                } else {
-                    tag_map.insert(tag.lock().unwrap().mac.clone(), tag.clone());
-                    gateway.tags.lock().unwrap().push(tag.clone());
-                }
-            }
-        } else {
-            let tag_list_clone = tag_list.lock().unwrap().clone();
-            let gateway = Arc::new(Mutex::new(Gateway {
-                mac: mac.clone(),
-                total: tag_list_clone.len() as u32,
-                tags: tag_list,
-                packet_receive_rate: 0,
-                tag_map,
-                tag_packets: tag_list_clone,
-            }));
-            gateway_list.push(gateway.clone());
-            gateway_map.insert(mac, gateway.clone());
-        }
-    }
-}
 
 #[derive(Debug, Serialize, Clone)]
 pub struct PageResponse<T> {
@@ -258,7 +191,7 @@ pub fn paginate<T: Clone>(data: Vec<T>, page_index: usize, page_size: usize) -> 
         total: data.len(),
     }
 }
-fn format_mac(bytes: [u8; 6]) -> String {
+pub(crate) fn format_mac(bytes: [u8; 6]) -> String {
     let mut hex_str = String::with_capacity(bytes.len() * 2); // 预分配容量，优化性能
     for byte in bytes {
         // 格式化每个字节为两位 16 进制（0-255 -> "00"-"ff"）

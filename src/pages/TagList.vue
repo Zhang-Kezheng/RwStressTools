@@ -38,7 +38,7 @@ onUnmounted(()=>{
   if (timer) clearInterval(timer)
 })
 const page=reactive({
-  pageSize:20,
+  pageSize:100,
   pageIndex:1,
   total:0
 })

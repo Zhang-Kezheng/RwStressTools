@@ -3,7 +3,6 @@ import {nextTick, onMounted, onUnmounted, Reactive, reactive, Ref, ref} from 'vu
 import {invoke} from "@tauri-apps/api/core";
 import * as ip from 'ip';
 import TagList from "./TagList.vue";
-import { bind,unbind,listen } from '@kuyoonjo/tauri-plugin-udp';
 type Ipaddr = {
   name: string,
   ipaddr: string
@@ -27,7 +26,6 @@ const network_interfaces = async () => {
   })
 }
 import {AoaGatewayVo, AoaTagVo, PageResponse} from "../vo/vo";
-
 let gatewayTableList = ref([])
 onMounted(async () => {
   await network_interfaces()
@@ -37,9 +35,8 @@ onUnmounted(async () => {
     await stop()
   }
 })
-const gatewayList=[]
-const gatewayMap=new Map<string,AoaGatewayVo>
 async function start() {
+  time.value = 0
   option.protocol_id = option.ip + ":" + option.port
   await invoke("bind", {id: option.protocol_id, ip: option.ip, port: option.port})
   fetchGateway()
@@ -54,7 +51,6 @@ let timer: NodeJS.Timeout = null
 
 async function stop() {
   clearInterval(timer)
-  time.value = 0
   await invoke("unbind", {id: option.protocol_id})
   option.protocol_id = ''
 }
@@ -207,6 +203,8 @@ const diubaolv=(row:AoaGatewayVo)=>{
         <template #default="scope">
           {{diubaolv(scope.row)}}
         </template>
+      </el-table-column>
+      <el-table-column label="收包速率(Byte/S)" align="center" prop="packet_receive_rate">
       </el-table-column>
       <el-table-column label="标签数" align="center">
         <template #default="scope">

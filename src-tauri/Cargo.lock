@@ -3635,6 +3635,8 @@ dependencies = [
  "bytebuffer",
  "lazy_static",
  "local-ip-address",
+ "log",
+ "rand 0.9.2",
  "rust_decimal",
  "rust_decimal_macros",
  "serde",

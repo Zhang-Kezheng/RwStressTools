@@ -1,3 +1,4 @@
+use std::sync::RwLock;
 use bytebuffer::ByteBuffer;
 use serde::Serialize;
 #[derive(Debug, Serialize, Clone)]
@@ -11,7 +12,7 @@ pub struct AoaGateway {
     pub data: Vec<u8>,
     check_sum: u8,
 }
-
+static  SN:RwLock<u8>=RwLock::new(0);
 impl AoaGateway {
     pub fn get_instance(data: Vec<u8>) -> Option<AoaGateway> {
         let mut byte_buffer = ByteBuffer::from(data);
@@ -39,18 +40,55 @@ impl AoaGateway {
         };
         Some(aoa_gateway)
     }
+
+    pub fn new(data: &[u8],device_id:[u8;6]) -> AoaGateway {
+        let length= data.len()+16;
+        let mut sn= *SN.write().unwrap();
+        sn += 1;
+        let mut gateway=AoaGateway{
+            header:0x02030405,
+            length:length as u16,
+            dev_id:device_id,
+            cmd:0x01,
+            sn,
+            jiami: 1,
+            data: data.to_vec(),
+            check_sum: 0,
+        };
+        gateway.check_sum=gateway.check();
+        gateway
+    }
+
+    pub fn to_bytes(&self)->Vec<u8>{
+        let mut buffer = ByteBuffer::new();
+        buffer.write_u32(self.header);
+        buffer.write_u16(self.length);
+        buffer.write_bytes(self.dev_id.as_slice());
+        buffer.write_u8(self.cmd);
+        buffer.write_u8(self.sn);
+        buffer.write_u8(self.jiami);
+        buffer.write_bytes(self.data.as_slice());
+        buffer.write_u8(self.check_sum);
+        return Vec::from(buffer.as_bytes());
+    }
+    fn check(&self)->u8{
+        let sum:i32=self.to_bytes().iter()
+            .map(|&b| b as i32) // 关键：&b 解引用为 u8，再转为 i32
+            .sum();
+        ((sum-self.to_bytes()[self.to_bytes().len()-1] as i32)%256) as u8
+    }
 }
 #[derive(Debug, Serialize, Clone)]
 pub struct AoaTag {
     pub mac: [u8; 6],
-    length: u8,
-    fix: u8,
-    manufacturer_id: u16,
-    package_id: u8,
+    pub length: u8,
+    pub fix: u8,
+    pub manufacturer_id: u16,
+    pub  package_id: u8,
     pub command: u8,
     pub user_data: [u8; 3],
-    crc: u8,
-    df_field: [u8; 20],
+    pub crc: i16,
+    pub df_field: [u8; 20],
     pub rssi: i8,
 }
 
@@ -75,7 +113,7 @@ impl AoaTag {
                 .as_slice()
                 .try_into()
                 .unwrap(),
-            crc: byte_buffer.read_u8().unwrap(),
+            crc: byte_buffer.read_i16().unwrap(),
             df_field: byte_buffer
                 .read_bytes(20)
                 .unwrap()
@@ -84,5 +122,21 @@ impl AoaTag {
                 .unwrap(),
             rssi: byte_buffer.read_i8().unwrap(),
         }
+    }
+
+    pub fn to_bytes(&self)->Vec<u8>{
+        let mut buffer= ByteBuffer::new();
+        buffer.write_bytes(self.mac.as_slice());
+        buffer.write_u8(self.length);
+        buffer.write_u8(self.fix);
+        buffer.write_u16(self.manufacturer_id);
+        buffer.write_u8(self.package_id);
+        buffer.write_u8(self.command);
+        buffer.write_bytes(self.user_data.as_slice());
+        buffer.write_i16(self.crc);
+
+        buffer.write_bytes(self.df_field.as_slice());
+        buffer.write_i8(self.rssi);
+        Vec::from(buffer.as_bytes())
     }
 }

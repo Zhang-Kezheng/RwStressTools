@@ -27,6 +27,7 @@ export class AoaTagVo{
 
 export type AoaGatewayVo ={
     mac: string;
-    tag_count: number;
-    total: number;
+    tag_count:number,
+    total:number
+    tag_packet_list:AoaTagVo[]
 }
