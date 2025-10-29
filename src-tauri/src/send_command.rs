@@ -3,48 +3,62 @@ use bytebuffer::ByteBuffer;
 use lazy_static::lazy_static;
 use rand::{Rng, RngCore};
 use tokio::net::UdpSocket;
-use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
+use tokio::sync::{mpsc};
+use tokio::task::{JoinError, JoinHandle, JoinSet};
 use tokio::time::sleep;
+use std::sync::{Arc, Mutex, Condvar, RwLock};
+use std::sync::atomic::{AtomicBool, Ordering};
 use log::log;
+use rand::rngs::ThreadRng;
+use crate::BusinessError;
+use crate::client::{Client, TcpClient, UdpClient};
 use crate::dto::Gateway;
 use crate::protocol::{AoaGateway, AoaTag};
-
-lazy_static! {
-    static ref SEND_TASK_LIST: RwLock<Vec<JoinHandle<()>>> = RwLock::new(Vec::new());
-}
+static  RUNNING:AtomicBool = AtomicBool::new(false);
+//0 udp 1 tcp
 #[tauri::command]
 pub async fn send_start(
+    protocol:i32,
     target: String,
     thread_count: i32,
     rate: u64,
 ) -> crate::Result<()> {
+    let  duration = Duration::from_millis(rate); //
+    let mut join_set=JoinSet::new();
+    RUNNING.store(true, Ordering::SeqCst);
     for index in 0..thread_count {
-        SEND_TASK_LIST.write().await.push(send_task(target.clone(),rate,index));
+        let value = target.clone();
+        join_set.spawn(async move{
+            let mut client:Box<dyn Client + Send> = if protocol==0 {Box::new( UdpClient::new(value).await.expect("udp客户端创建失败")) } else { Box::new(TcpClient::new(value).await.expect("tcp客户端创建失败")) };
+            while RUNNING.load(Ordering::SeqCst)  {
+                let data=build_packet(index);
+                client.write( data.as_slice()).await.expect("couldn't send data");
+                sleep(duration).await; // 模拟耗时操作
+            }
+            client.stop().await.expect("停止失败");
+        });
+    }
+    while let Some(result) = join_set.join_next().await {
+        return match result {
+            // 任务执行时发生 panic（如 unwrap 失败）
+            Err(join_err) => {
+                RUNNING.store(false, Ordering::SeqCst);
+                join_set.abort_all();
+                Err(BusinessError::CUSTOM(join_err.to_string()))
+            }
+            // 任务返回业务结果
+            Ok(id) =>  {
+                Ok(())
+            },
+        }
     }
     Ok(())
 }
 #[tauri::command]
 pub async fn send_stop(
 ) -> crate::Result<()> {
-    SEND_TASK_LIST.read().await.iter().for_each(|x| {
-       let _=x.abort();
-    });
-    SEND_TASK_LIST.write().await.clear();
+    RUNNING.store(false, Ordering::SeqCst);
     Ok(())
-}
- fn send_task(target: String,rate: u64,index:i32)->JoinHandle<()>{
-    let  duration = Duration::from_millis(rate); // 设置为每小时执行一次
-    tokio::spawn( async move {
-        let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-        loop {
-            let data=build_packet(index);
-            println!("{}",data.len());
-            socket.send_to(data.as_slice(), target.as_str()).await.expect("couldn't send data");
-            sleep(duration).await; // 模拟耗时操作
-        }
-    })
-
 }
 lazy_static!{
     static ref MAC_CONTAINER: Vec<[u8;6]> ={
@@ -61,8 +75,8 @@ lazy_static!{
     };
 }
 fn build_packet(index:i32)-> Vec<u8>{
-    let mut rng = rand::rng();
     let tag_count=26;
+    let mut rng =rand::rng();
     let mut buffer = ByteBuffer::new();
     buffer.write_u8(tag_count);
     for i in 0..26 {

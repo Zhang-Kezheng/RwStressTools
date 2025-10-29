@@ -38,7 +38,7 @@ onUnmounted(async () => {
 async function start() {
   time.value = 0
   option.protocol_id = option.ip + ":" + option.port
-  await invoke("bind", {id: option.protocol_id, ip: option.ip, port: option.port})
+  await invoke("receive_start", {protocol: option.transform_protocol, ip: option.ip, port: option.port})
   fetchGateway()
   timer = setInterval(() => {
     time.value += 1000
@@ -51,7 +51,7 @@ let timer: NodeJS.Timeout = null
 
 async function stop() {
   clearInterval(timer)
-  await invoke("unbind", {id: option.protocol_id})
+  await invoke("receive_stop")
   option.protocol_id = ''
 }
 
@@ -89,7 +89,7 @@ const formatTime = (time: number): string => {
 }
 const ipaddrList = reactive(new Array<Ipaddr>())
 const option = reactive({
-  transform_protocol: "UDP",
+  transform_protocol: 0,
   port: 32500,
   ip: "0.0.0.0",
   protocol_type: "AOA",
@@ -120,12 +120,12 @@ const diubaolv=(row:AoaGatewayVo)=>{
               <el-option
                   key="UDP"
                   label="UDP"
-                  value="UDP"
+                  :value="0"
               />
               <el-option
                   key="TCP"
                   label="TCP"
-                  value="TCP"
+                  :value="1"
               />
             </el-select>
           </el-form-item>

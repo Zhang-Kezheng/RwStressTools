@@ -15,17 +15,19 @@ use crate::dto::{paginate, Gateway, PageResponse, TagDto};
 use crate::{format_time, udp};
 use std::io::Write;
 use bytebuffer::ByteBuffer;
+use crate::client::{Client, TcpClient, UdpClient};
 use crate::protocol::{AoaGateway, AoaTag};
+use crate::server::{Server, UdpServer,TcpServer};
 
 lazy_static! {
     static ref GATEWAY_MAP: RwLock<HashMap<String, Arc<Mutex<Gateway>>>> =
         RwLock::new(HashMap::new());
 }
 lazy_static! {
-    static ref GATEWAY_LIST: RwLock<Vec<Arc<Mutex<Gateway>>>> = RwLock::new(Vec::new());
+    pub static ref GATEWAY_LIST: RwLock<Vec<Arc<Mutex<Gateway>>>> = RwLock::new(Vec::new());
 }
 lazy_static! {
-    static ref RECEIVE_TASK: RwLock<Option<JoinHandle<()>>> = RwLock::new(None);
+    static ref SERVER:RwLock<Option<Arc<dyn  Server  + Send + Sync>>>=RwLock::new(None);
 }
 
 #[tauri::command]
@@ -65,30 +67,34 @@ pub async fn fetch_gateway(index: usize, size: usize,mac: String, ) -> crate::Re
     Ok(page_result)
 }
 #[tauri::command]
-pub async fn bind<R: Runtime>(window: tauri::Window<R>, id: String, ip: String, port: u16, ) -> crate::Result<()> {
+pub async fn receive_start(protocol:i32, ip: String, port: u16, ) -> crate::Result<()> {
     GATEWAY_LIST.write().unwrap().clear();
     GATEWAY_MAP.write().unwrap().clear();
-    udp::bind(window, id, ip, port, false).await?;
-    let  duration = Duration::from_secs(1); // 设置为每小时执行一次
-    *RECEIVE_TASK.write().unwrap()=  Some(tokio::spawn( async move{
+    let bind_at=format!("{}:{}",ip,port);
+    let task=tokio::spawn( async {
+        let  duration = Duration::from_secs(1); // 设置为每小时执行一次
         loop {
             GATEWAY_LIST.read().unwrap().iter().for_each(|item|{
                 item.lock().unwrap().packet_receive_rate=0
             });
             sleep(duration).await; // 模拟耗时操作
         }
-    }));
+    });
+    let  server:Arc<dyn Server+ Send + Sync> = if protocol==0 {
+        Arc::new(UdpServer::bind(bind_at,task).await.expect("UDP服务器创建失败"))
+    }else {
+        Arc::new(TcpServer::bind(bind_at,task).await.expect("TCP服务器创建失败"))
+    };
+    *SERVER.write().unwrap()=Some(server.clone());
 
     Ok(())
 }
 
 #[tauri::command]
-pub async fn unbind(id: String) -> crate::Result<()> {
-    udp::unbind(id).await?;
-    unsafe {
-        if RECEIVE_TASK.read().unwrap().is_some() {
-            let _ = RECEIVE_TASK.read().unwrap().as_ref().unwrap().abort();
-        }
+pub async fn receive_stop() -> crate::Result<()> {
+    if SERVER.read().unwrap().is_some() {
+        let _ = SERVER.read().unwrap().as_ref().unwrap().stop();
+        *SERVER.write().unwrap()=None
     }
     Ok(())
 }
@@ -165,13 +171,9 @@ pub async fn export_tag_list(
     Ok(())
 }
 
-pub async fn process<R: Runtime>(window: tauri::Window<R>, data: Vec<u8>) {
+pub async fn process(data: Vec<u8>) {
     if let Some(aoa_gateway) = AoaGateway::get_instance(data) {
         let mac = crate::dto::format_mac(aoa_gateway.dev_id);
-        let _ =
-            window
-                .app_handle()
-                .emit_to(window.label(), "plugin://aoa_tag", aoa_gateway.clone());
         let mut byte_buffer = ByteBuffer::from_vec(aoa_gateway.data.clone());
         let count = byte_buffer.read_u8().unwrap() as usize;
         let tag_list = Mutex::new(vec![]);

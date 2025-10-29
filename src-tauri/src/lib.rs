@@ -3,6 +3,9 @@ mod protocol;
 mod udp;
 mod receive_command;
 mod send_command;
+mod client;
+mod server;
+
 use rust_decimal::prelude::ToPrimitive;
 use std::error::Error;
 use std::io::Write;
@@ -11,7 +14,7 @@ use std::{io, result};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, Runtime};
 use time::{format_description, UtcDateTime};
-use crate::receive_command::{bind, export_tag_list, fetch_gateway, fetch_tag_list, network_interfaces, unbind};
+use crate::receive_command::{receive_start, export_tag_list, fetch_gateway, fetch_tag_list, network_interfaces, receive_stop};
 use crate::send_command::{send_start, send_stop};
 
 pub type Result<T> = result::Result<T, BusinessError>;
@@ -80,8 +83,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             network_interfaces,
-            bind,
-            unbind,
+            receive_start,
+            receive_stop,
             fetch_gateway,
             fetch_tag_list,
             export_tag_list,

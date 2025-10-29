@@ -3,7 +3,7 @@ import {onUnmounted, reactive, ref} from "vue";
 import {invoke} from "@tauri-apps/api/core";
 
 const option = reactive({
-  transform_protocol: "UDP",
+  transform_protocol: 0,
   port: 32500,
   ip: "127.0.0.1",
   protocol_type: "AOA",
@@ -34,8 +34,8 @@ let interval_id=null
 const logs=reactive([])
 async function stop() {
   option.protocol_id='';
-  await invoke("send_stop");
   if (interval_id)clearInterval(interval_id);
+  await invoke("send_stop");
 }
 onUnmounted(()=>{
   if (interval_id)clearInterval(interval_id);
@@ -43,13 +43,24 @@ onUnmounted(()=>{
 async function start() {
   run_time.value=0
   option.protocol_id=option.ip+":"+option.port;
-  logs.push(`${format_date(new Date())} 启动`)
-  await invoke("send_start",{target:option.protocol_id,threadCount:Number(option.thread_count),rate:Number(option.rate)});
   interval_id=Number(setInterval(()=>{
         run_time.value+=1000;
       },1000)
   )
-  logs.push(`${format_date(new Date())} 启动成功`)
+  logs.push(`${format_date(new Date())} 运行中`)
+  invoke("send_start",{protocol:option.transform_protocol,target:option.protocol_id,threadCount:Number(option.thread_count),rate:Number(option.rate)}).then(res=>{
+    logs.push(`${format_date(new Date())} 已结束`)
+  }).catch(err=>{
+    ElNotification({
+      title: 'Error',
+      message:  err,
+      type: 'error',
+      position: 'bottom-right',
+    })
+    option.protocol_id='';
+    if (interval_id)clearInterval(interval_id);
+    logs.push(`${format_date(new Date())} 已结束`)
+  });
 }
 function format_date(now:Date):string{
   const year = now.getFullYear();
@@ -73,12 +84,12 @@ function format_date(now:Date):string{
               <el-option
                   key="UDP"
                   label="UDP"
-                  value="UDP"
+                  :value="0"
               />
               <el-option
                   key="TCP"
                   label="TCP"
-                  value="TCP"
+                  :value="1"
               />
             </el-select>
           </el-form-item>
@@ -129,22 +140,22 @@ function format_date(now:Date):string{
         </el-col>
       </el-row>
     </el-form>
-    <el-card style="flex: 1;display: flex;flex-direction: column" body-class="el-body">
+    <el-card style="flex: 1;display: flex;flex-direction: column" body-class="el-card-body">
       <template #header>
         <div class="card-header">
           <span>操作日志</span>
         </div>
       </template>
-      <el-scrollbar height="400px">
-        <p v-for="log in logs"  class="text item">{{log }}</p>
-      </el-scrollbar>
+      <p v-for="log in logs"  class="text item">{{log }}</p>
     </el-card>
   </div>
 </template>
 
-<style scoped>
-.el-body{
+<style>
+.el-card-body{
   flex: 1;
+  display: flex;
   overflow: auto;
+  flex-direction: column;
 }
 </style>

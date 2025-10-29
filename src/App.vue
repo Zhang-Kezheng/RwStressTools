@@ -12,7 +12,7 @@ router.push(menuRoutes[0])
 Window.getCurrent().onCloseRequested(async (event) => {
   if (appConfig.exit===ExitEnum.MIN){
     event.preventDefault();
-    if (platform=="windows"){
+    if (platform()==="windows"){
       await Window.getCurrent().hide()
     }else {
       await hide()

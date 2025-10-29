@@ -44,7 +44,7 @@ pub async fn bind<R: Runtime>(
                     break;
                 }
                 println!("{:?} bytes received from {:?}", len, addr);
-                process(window.clone(), buf[..len].to_vec()).await;
+                process(buf[..len].to_vec()).await;
             }
         }
         ()
