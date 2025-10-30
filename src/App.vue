@@ -5,7 +5,9 @@ import { Window } from '@tauri-apps/api/window';
 import {getCurrentInstance, onMounted, reactive, ref} from "vue";
 import {ExitEnum,appConfig} from "./stores/LocalStorage";
 import {defaultWindowIcon, hide, show} from "@tauri-apps/api/app";
+import {attachConsole } from '@tauri-apps/plugin-log';
 import { platform } from '@tauri-apps/plugin-os';
+attachConsole()
 const router = useRouter()
 const menuRoutes=['/SendView','/ReceiveView','/HistoryView','/SettingView']
 router.push(menuRoutes[0])

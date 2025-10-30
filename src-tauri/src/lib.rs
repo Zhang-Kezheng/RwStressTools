@@ -1,11 +1,15 @@
+mod client;
 mod dto;
 mod protocol;
-mod udp;
 mod receive_command;
 mod send_command;
-mod client;
 mod server;
+mod udp;
 
+use crate::receive_command::{
+    export_tag_list, fetch_gateway, fetch_tag_list, network_interfaces, receive_start, receive_stop,
+};
+use crate::send_command::{send_start, send_stop};
 use rust_decimal::prelude::ToPrimitive;
 use std::error::Error;
 use std::io::Write;
@@ -14,8 +18,6 @@ use std::{io, result};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, Runtime};
 use time::{format_description, UtcDateTime};
-use crate::receive_command::{receive_start, export_tag_list, fetch_gateway, fetch_tag_list, network_interfaces, receive_stop};
-use crate::send_command::{send_start, send_stop};
 
 pub type Result<T> = result::Result<T, BusinessError>;
 #[derive(Debug, thiserror::Error)]
@@ -27,7 +29,7 @@ pub enum BusinessError {
     #[error("{0}")]
     CUSTOM(String),
     #[error("json 序列化错误: {0}")]
-    OTHER(#[from] serde_json::Error),
+    SERDE_JSON(#[from] serde_json::Error),
 }
 
 impl serde::Serialize for BusinessError {
@@ -39,22 +41,15 @@ impl serde::Serialize for BusinessError {
     }
 }
 
-fn format_time(ms_timestamp: u128) -> String {
-    let format =
-        format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
-    // 转换为 DateTime
-    UtcDateTime::from_unix_timestamp(ms_timestamp as i64)
-        .unwrap()
-        .format(&format)
-        .unwrap()
-        .to_string()
-}
-
-
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(tauri_plugin_log::log::LevelFilter::Info)
+                .build(),
+        )
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())

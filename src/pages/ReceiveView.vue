@@ -16,34 +16,43 @@ const network_interfaces = async () => {
       }
       return ipaddr
     }).filter((item) => {
-      return ip.isV4Format(item.ipaddr)
+      return ip.isV4Format(item.ipaddr)&&is_physical_interface(item.name)
     }).forEach((item) => {
       ipaddrList.push(item)
     })
+    ipaddrList.push({name: "loopback", ipaddr: "127.0.0.1"})
     ipaddrList.push({name: "all", ipaddr: "0.0.0.0"})
   }, (error) => {
     throw error
   })
 }
+function is_physical_interface(name: string){
+  return name.startsWith("en") &&
+  !name.startsWith("bridge") &&
+  !name.startsWith("utun") &&
+  !name.startsWith("lima")
+}
+
 import {AoaGatewayVo, AoaTagVo, PageResponse} from "../vo/vo";
 let gatewayTableList = ref([])
 onMounted(async () => {
   await network_interfaces()
 });
 onUnmounted(async () => {
-  if (option.protocol_id !== '') {
+  if (option.running) {
     await stop()
   }
 })
 async function start() {
-  time.value = 0
-  option.protocol_id = option.ip + ":" + option.port
-  await invoke("receive_start", {protocol: option.transform_protocol, ip: option.ip, port: option.port})
-  fetchGateway()
-  timer = setInterval(() => {
-    time.value += 1000
+  invoke("receive_start", {protocol: option.transform_protocol, ip: option.ip, port: Number(option.port)}).then(res=>{
+    time.value = 0
+    option.running =true
     fetchGateway()
-  }, 1000)
+    timer = setInterval(() => {
+      time.value += 1000
+      fetchGateway()
+    }, 1000)
+  })
 }
 
 let time = ref(0)
@@ -52,11 +61,11 @@ let timer: NodeJS.Timeout = null
 async function stop() {
   clearInterval(timer)
   await invoke("receive_stop")
-  option.protocol_id = ''
+  option.running = false
 }
 
 const run = async () => {
-  if (option.protocol_id !== '') {
+  if (option.running) {
     await stop()
   } else {
     await start()
@@ -92,9 +101,9 @@ const option = reactive({
   transform_protocol: 0,
   port: 32500,
   ip: "0.0.0.0",
-  protocol_type: "AOA",
+  protocol_type: "IOT_BOX",
   frequency: 0,
-  protocol_id: '',
+  running: false,
   mac: ''
 })
 const mac = ref('')
@@ -134,9 +143,9 @@ const diubaolv=(row:AoaGatewayVo)=>{
           <el-form-item label="协议类型">
             <el-select v-model="option.protocol_type" placeholder="协议类型">
               <el-option
-                  key="AOA"
-                  label="AOA"
-                  value="AOA"
+                  key="IOT_BOX"
+                  label="IOT_BOX"
+                  value="IOT_BOX"
               />
             </el-select>
           </el-form-item>
@@ -167,9 +176,9 @@ const diubaolv=(row:AoaGatewayVo)=>{
         </el-col>
         <el-col :span="3">
           <el-row justify="space-evenly">
-            <el-button :type="option.protocol_id===''?'primary':'danger'" @click="run">
-              <span v-if="option.protocol_id===''">开始</span>
-              <span v-else>停止</span>
+            <el-button :type="option.running?'danger':'primary'" @click="run">
+              <span v-if="option.running">停止</span>
+              <span v-else>开始</span>
             </el-button>
             <el-text>{{ formatTime(time) }}</el-text>
           </el-row>

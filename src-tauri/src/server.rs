@@ -1,31 +1,29 @@
+use crate::receive_command::process;
+use async_trait::async_trait;
 use std::future::Future;
 use std::sync::Arc;
-use async_trait::async_trait;
+use log::{log, Level};
 use tokio::io;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 use tokio::task::JoinHandle;
-use crate::receive_command::process;
 
 #[async_trait]
-pub trait Server{
-
+pub trait Server {
     fn stop(&self);
 }
 
-
-pub struct UdpServer{
+pub struct UdpServer {
     udp_socket: Arc<UdpSocket>,
-    receive_task:JoinHandle<()>,
-    task:JoinHandle<()>
+    receive_task: JoinHandle<()>,
+    task: JoinHandle<()>,
 }
-impl UdpServer{
-    pub(crate) async fn bind(bind_at: String, task:JoinHandle<()>) -> crate::Result<Self>
-    {
-        println!("UDP 服务器已启动，监听端口 {}...",bind_at);
+impl UdpServer {
+    pub(crate) async fn bind(bind_at: String, task: JoinHandle<()>) -> crate::Result<Self> {
+        log!(Level::Info,"UDP 服务器已启动，监听端口 {}...", &bind_at);
         let udp_socket = UdpSocket::bind(bind_at).await?;
-        let udp_socket= Arc::new(udp_socket);
-        let udp_socket_clone=udp_socket.clone();
+        let udp_socket = Arc::new(udp_socket);
+        let udp_socket_clone = udp_socket.clone();
         let receive_task = tokio::task::spawn(async move {
             let mut buf = [0; 65535];
             loop {
@@ -38,30 +36,31 @@ impl UdpServer{
             }
             ()
         });
-        Ok(UdpServer{udp_socket,receive_task,task})
+        Ok(UdpServer {
+            udp_socket,
+            receive_task,
+            task,
+        })
     }
 }
-impl Server for UdpServer{
-
+impl Server for UdpServer {
     fn stop(&self) {
         self.receive_task.abort();
         self.task.abort()
     }
 }
 
-pub struct TcpServer{
+pub struct TcpServer {
     listener: Arc<TcpListener>,
-    receive_task:JoinHandle<()>,
-    task:JoinHandle<()>
+    receive_task: JoinHandle<()>,
+    task: JoinHandle<()>,
 }
 
-impl TcpServer{
-    pub(crate) async fn bind(bind_at: String, task:JoinHandle<()>) -> crate::Result<Self>
-    {
-
+impl TcpServer {
+    pub(crate) async fn bind(bind_at: String, task: JoinHandle<()>) -> crate::Result<Self> {
         let listener = Arc::new(TcpListener::bind(bind_at.clone()).await?);
-        println!("TCP 服务器已启动，监听端口 {}...",bind_at);
-        let lister_clone=listener.clone();
+        log!(Level::Info,"TCP 服务器已启动，监听端口 {}...", &bind_at);
+        let lister_clone = listener.clone();
         let receive_task = tokio::task::spawn(async move {
             loop {
                 let (stream, _) = listener.accept().await.unwrap();
@@ -74,7 +73,11 @@ impl TcpServer{
                 });
             }
         });
-        Ok(TcpServer{listener:lister_clone,receive_task,task})
+        Ok(TcpServer {
+            listener: lister_clone,
+            receive_task,
+            task,
+        })
     }
 }
 async fn handle_client(mut stream: TcpStream) -> io::Result<()> {
@@ -84,11 +87,11 @@ async fn handle_client(mut stream: TcpStream) -> io::Result<()> {
     // 循环处理多个请求，直到客户端断开
     loop {
         let mut head_buf = [0u8; 4];
-        stream.read_exact(&mut  head_buf).await?;
+        stream.read_exact(&mut head_buf).await?;
         let mut len_buf = [0u8; 2];
         stream.read_exact(&mut len_buf).await?; // 读长度
         let len = u16::from_be_bytes(len_buf) as usize;
-        let mut data = vec![0u8; len-6];
+        let mut data = vec![0u8; len - 6];
         stream.read_exact(&mut data).await?; // 读消息体
         let mut vec_data = head_buf.to_vec();
         vec_data.extend(len_buf.to_vec());
@@ -98,8 +101,7 @@ async fn handle_client(mut stream: TcpStream) -> io::Result<()> {
     }
     Ok(())
 }
-impl Server for TcpServer{
-
+impl Server for TcpServer {
     fn stop(&self) {
         self.receive_task.abort();
         self.task.abort()

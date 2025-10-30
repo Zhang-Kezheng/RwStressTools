@@ -6,8 +6,10 @@ use rust_decimal::Decimal;
 use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 use std::ops::{Div, Mul};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Mutex,RwLock};
+use std::sync::{Arc};
 use std::time::{SystemTime, UNIX_EPOCH};
+use chrono::Utc;
 use tauri::{Emitter, Manager, Runtime};
 
 // 导入必要的 trait（如 FromStr）
@@ -28,8 +30,8 @@ pub struct TagDto {
     pub deep_sleep_time: Option<u8>,
     pub light_sleep_time: Option<u8>,
     pub rssi: i32,
-    pub last_time: u128,
-    pub first_time: u128,
+    pub last_time: i64,
+    pub first_time: i64,
     pub packet_count: u32,
 }
 
@@ -88,7 +90,7 @@ pub struct Gateway {
     pub(crate) tag_packets: Vec<Arc<Mutex<TagDto>>>,
 }
 impl Serialize for Gateway {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -126,14 +128,8 @@ pub(crate) fn transform(aoa_tag: AoaTag) -> TagDto {
         deep_sleep_time: None,
         light_sleep_time: None,
         rssi: aoa_tag.rssi as i32,
-        last_time: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis(),
-        first_time: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis(),
+        last_time: Utc::now().timestamp_millis(),
+        first_time:  Utc::now().timestamp_millis(),
         packet_count: 1,
     };
     match aoa_tag.command {

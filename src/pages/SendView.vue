@@ -6,7 +6,7 @@ const option = reactive({
   transform_protocol: 0,
   port: 32500,
   ip: "127.0.0.1",
-  protocol_type: "AOA",
+  protocol_type: "IOT_BOX",
   rate: 1000,
   protocol_id: '',
   thread_count: 1,
@@ -48,7 +48,7 @@ async function start() {
       },1000)
   )
   logs.push(`${format_date(new Date())} 运行中`)
-  invoke("send_start",{protocol:option.transform_protocol,target:option.protocol_id,threadCount:Number(option.thread_count),rate:Number(option.rate)}).then(res=>{
+  invoke("send_start",{protocol:option.transform_protocol,ip:option.ip,port:Number(option.port),threadCount:Number(option.thread_count),rate:Number(option.rate)}).then(res=>{
     logs.push(`${format_date(new Date())} 已结束`)
   }).catch(err=>{
     ElNotification({
@@ -98,9 +98,9 @@ function format_date(now:Date):string{
           <el-form-item label="协议类型">
             <el-select v-model="option.protocol_type" placeholder="协议类型">
               <el-option
-                  key="AOA"
-                  label="AOA"
-                  value="AOA"
+                  key="IOT_BOX"
+                  label="IOT_BOX"
+                  value="IOT_BOX"
               />
             </el-select>
           </el-form-item>
